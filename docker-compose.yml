@@ -1,20 +1,43 @@
 version: '3.8'
 
 services:
+  db:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${DB_NAME:-librarydb}
+      POSTGRES_USER: ${DB_USER:-libraryuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-strongpass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-libraryuser}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "5000:5000"
+      - "5001:5000"
     environment:
-      - DB_HOST=${DB_HOST}
-      - DB_NAME=${DB_NAME}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_PORT=${DB_PORT}
+      DB_HOST: db
+      DB_NAME: ${DB_NAME:-librarydb}
+      DB_USER: ${DB_USER:-libraryuser}
+      DB_PASSWORD: ${DB_PASSWORD:-strongpass}
+      DB_PORT: ${DB_PORT:-5432}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app  # dev hot-reload
+    networks:
+      - app-network
 
   frontend:
     build:
@@ -24,17 +47,12 @@ services:
       - "80:80"
     depends_on:
       - backend
-
-  db:
-    image: postgres:15-alpine
-    ports:
-      - "5432:5432"
-    environment:
-      - POSTGRES_DB=postgres
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
 
 volumes:
   postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
